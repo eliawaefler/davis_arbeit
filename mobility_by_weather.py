@@ -261,11 +261,14 @@ def main_old():
     wetter_Zurich = load_weather_data(default_path_zurich, default_path_zurich)
 
     # Load mobility data
-    default_points_path = "arbeit/mobility_zurich/standorte.csv"
-    default_counts_path = "arbeit/mobility_zurich/zurich_mobility.csv"
+    default_points_path = "standorte.csv"
+    #default_counts_path = "arbeit/mobility_zurich/zurich_mobility.csv"
     zurich_points_df = load_mobility_data(default_points_path)
-    zurich_counts_df = load_mobility_data(default_counts_path)
-
+    zurich_counts_df_1 = load_mobility_data("zurich_mobility_1.csv")
+    zurich_counts_df_2 = load_mobility_data("zurich_mobility_2.csv")
+    zurich_counts_df_3 = load_mobility_data("zurich_mobility_3.csv")
+    zurich_counts_df = pd.concat([zurich_counts_df_1, zurich_counts_df_2], ignore_index=True)
+    zurich_counts_df = pd.concat([zurich_counts_df, zurich_counts_df_3], ignore_index=True)
     show_weather_rain = False
     show_weather_temp = False
     show_weather_wind = False
