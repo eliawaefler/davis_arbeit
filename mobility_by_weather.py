@@ -166,7 +166,7 @@ def wind_visual(wind_speed):
     width = min(wind_speed / max_wind * 100, 100)
     return f"""
     <div style='width: {width}%; background-color: #B0C4DE; height: 10px; border-radius: 5px;'></div>
-    {'💨' * int(wind_speed // 5)}
+    {'💨' * int(wind_speed // 5)}       
     """
 
 
@@ -235,7 +235,8 @@ def process_traffic_data(points_df, counts_df, start_timestamp, duration, unit):
             bezeichnung = point_row['bezeichnung'].iloc[0]
             popup = f"{bezeichnung}: {total_traffic:.0f} (Velo: {traffic_row['VELO_IN']:.0f}/{traffic_row['VELO_OUT']:.0f}, Fuss: {traffic_row['FUSS_IN']:.0f}/{traffic_row['FUSS_OUT']:.0f})"
         else:
-            popup = f"Standort {standort}: {total_traffic:.0f} (Velo: {traffic_row['VELO_IN']:.0f}/{traffic_row['VELO_OUT']:.0f}, Fuss: {traffic_row['FUSS_IN']:.0f}/{traffic_row['FUSS_OUT']:.0f})"
+            bezeichnung = ""
+            popup = f"Standort {bezeichnung}: {total_traffic:.0f} (Velo: {traffic_row['VELO_IN']:.0f}/{traffic_row['VELO_OUT']:.0f}, Fuss: {traffic_row['FUSS_IN']:.0f}/{traffic_row['FUSS_OUT']:.0f})"
 
         points.append({
             "coords": [lat, lon],
@@ -287,10 +288,17 @@ def main():
         start_date = st.date_input("Start date", value=datetime(2023, 1, 1))
         start_datetime = datetime(start_date.year, start_date.month, start_date.day, 1)  # Set to 01:00 UTC
         start_timestamp = int(start_datetime.timestamp())
-        st.write(f"Timestamp: {start_timestamp}")
-        unit = st.selectbox("Unit", ["Hours", "Days", "Months"])
-        duration = st.slider("Duration", 1, 24 if unit == "Hours" else 31, 12 if unit == "Hours" else 10)
-
+        #st.write(f"Datum: {start_timestamp}")
+        #unit = st.selectbox("Unit", ["Hours", "Days", "Months"])
+        unit = "Hours"
+        #duration = st.slider("Duration", 1, 24 if unit == "Hours" else 31, 12 if unit == "Hours" else 10)
+        duration = st.select_slider('Zeitraum', range(24), value=(13, 14))
+        #st.write(start_timestamp)
+        start_timestamp += duration[0]*3600
+        #st.write(duration)
+        duration = int(duration[1]-duration[0])
+        #st.write(duration)
+        #st.write(start_timestamp)
         show_dataf = st.toggle("show data")
         show_weather = st.toggle("show weather average")
         if st.toggle("show weather detail", True):
