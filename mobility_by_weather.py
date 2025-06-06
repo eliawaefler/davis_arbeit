@@ -73,6 +73,22 @@ def load_mobility_data(file_path):
         return None
 
 
+def is_dark(timestamp: int) -> bool:
+    # Convert timestamp to Zurich datetime (UTC+1, no DST adjustment here)
+    dt = datetime.fromtimestamp(timestamp + 3600*2)  # Add 1 hour for CET
+
+    # Get month and hour
+    month = dt.month
+    hour = dt.hour
+
+    # Define sunrise/sunset times (approximate for Zurich)
+    sunrise = 8 if month in [11, 12, 1, 2] else 7 if month in [3, 4, 9, 10] else 6
+    sunset = 18 if month in [11, 12, 1, 2] else 19 if month in [3, 4, 9, 10] else 21
+
+    # Check if time is before sunrise or after sunset
+    return hour < sunrise or hour >= sunset
+
+
 def filter_weather_data(df, start_timestamp, duration, unit):
     if df is not None and not df.empty:
         if unit == "Hours":
@@ -258,9 +274,9 @@ def main():
         st.session_state.filtered_counts = pd.DataFrame()
 
     # Load weather data
-    default_path_bern = "bern_wetter.csv"
+    #default_path_bern = "bern_wetter.csv"
     default_path_zurich = "zurich_wetter.csv"
-    wetter_Bern = load_weather_data(default_path_bern, default_path_bern)
+    #wetter_Bern = load_weather_data(default_path_bern, default_path_bern)
     wetter_Zurich = load_weather_data(default_path_zurich, default_path_zurich)
 
     # Load mobility data
@@ -280,11 +296,11 @@ def main():
         "Bern": [46.9480, 7.4474],
         "Zurich": [47.3769, 8.5417]
     }
-    left, b, middle, c, right = st.columns([2, 1, 10, 1, 2])
+    left, b, middle, c, right = st.columns([3, 1, 20, 1, 3])
 
     with left:
         st.header("Controls")
-        city = st.selectbox("City", ["Bern", "Zurich", "both"])
+        city = "Zurich" #st.selectbox("City", ["Bern", "Zurich", "both"])
         start_date = st.date_input("Start date", value=datetime(2023, 1, 1))
         start_datetime = datetime(start_date.year, start_date.month, start_date.day, 1)  # Set to 01:00 UTC
         start_timestamp = int(start_datetime.timestamp())
@@ -292,11 +308,11 @@ def main():
         #unit = st.selectbox("Unit", ["Hours", "Days", "Months"])
         unit = "Hours"
         #duration = st.slider("Duration", 1, 24 if unit == "Hours" else 31, 12 if unit == "Hours" else 10)
-        duration = st.select_slider('Zeitraum', range(24), value=(13, 14))
+        duration = st.select_slider('Zeitraum', range(0, 24), value=(13, 14))
         #st.write(start_timestamp)
-        start_timestamp += duration[0]*3600
+        start_timestamp += duration[0]*3600+3600
         #st.write(duration)
-        duration = int(duration[1]-duration[0])
+        duration = int(duration[1]-duration[0]+1)
         #st.write(duration)
         #st.write(start_timestamp)
         show_dataf = st.toggle("show data")
@@ -308,6 +324,7 @@ def main():
 
         # Select and filter data
         wetter = None
+        wetter_Bern = None
         if city == "Bern" and wetter_Bern is not None:
             wetter = wetter_Bern
         elif city == "Zurich" and wetter_Zurich is not None:
@@ -347,7 +364,7 @@ def main():
                 }]
 
     with middle:
-        st.header("wie beeinflusst das Wetter die Nutzung von Verkehrsmitteln in Bern und Zürich?")
+        st.header("wie beeinflusst das Wetter die Nutzung von Verkehrsmitteln in Zürich?")
         st.write("in dieser Datenvisualisierung kann für das Jahr 2023 Wetter und Mobilitätsdaten verglichen werden.")
         st.write("dieser Prototyp ist ein zwischenstand, es werden weitere Daten, Visualisierungen und (statistische) Auswertungen hinzugefügt.")
         if not filtered_df.empty:
@@ -359,6 +376,8 @@ def main():
                     with col:
                         timestamp = pd.to_datetime(row[1]['dt'], unit='s')
                         if unit == "Hours":
+                            if i == len(cols)-1:
+                                timestamp = pd.to_datetime(row[1]['dt']-3600, unit='s')
                             label = timestamp.strftime('%H:%M')
                         elif unit == "Days":
                             label = timestamp.strftime('%d.%m.')
@@ -367,10 +386,45 @@ def main():
                         st.write(label)
                         if show_weather:
                             emoji = get_weather_emoji(row[1]['weather_icon'])
-                            if st.button(f"{emoji}", key=f"{emoji}_{i}"):
+                            button_key = f"{emoji}_{i}"
+                            if is_dark(int(row[1]['dt'])-4*3600):
+                                st.markdown(
+                                    f"""
+                                    <style>
+                                    .rectangle {{
+                                        width: 100px;
+                                        height: 5px;
+                                        background-color: #333333;
+                                        border-radius: 0;
+                                    }}
+                                    </style>
+                                    <div class="rectangle"></div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+                            else:
+                                st.markdown(
+                                    f"""
+                                    <style>
+                                    .rectangle1 {{
+                                        width: 100px;
+                                        height: 5px;
+                                        background-color: #ffffed;
+                                        border-radius: 0;
+                                    }}
+                                    </style>
+                                    <div class="rectangle1"></div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+
+                            # Render button after CSS
+                            if st.button(f"{emoji}", key=button_key):
+                                timestamp = datetime.fromtimestamp(int(row[1]['dt']) + 3600)
                                 st.write(
                                     f"{emoji} {timestamp.strftime('%Y-%m-%d %H:%M:%S')}: {row[1]['weather_description'].capitalize()} "
-                                    f"(Temp: {row[1]['temp']:.1f}°C, Humidity: {row[1]['humidity']}%, Wind: {row[1]['wind_speed']:.1f} m/s)")
+                                    f"(Temp: {row[1]['temp']:.1f}°C, Humidity: {row[1]['humidity']}%, Wind: {row[1]['wind_speed']:.1f} m/s)"
+                                )
                         if show_weather_wind:
                             wind_speed = row[1]['wind_speed']
                             st.markdown(f"Wind: {wind_speed:.1f} m/s {wind_visual(wind_speed)}", unsafe_allow_html=True)
@@ -388,7 +442,6 @@ def main():
                                 f"<div style='{temp_to_color(temp)}; padding: 5px; border-radius: 5px;'>Temp: {temp:.1f}°C 🌡️</div>",
                                 unsafe_allow_html=True
                             )
-
         else:
             st.warning("No weather data available. Check time range or CSV data.")
         st.subheader("karte")
@@ -412,8 +465,6 @@ def main():
                 st.dataframe(zurich_points_df, use_container_width=True)
             if zurich_counts_df is not None:
                 st.dataframe(zurich_counts_df, use_container_width=True)
-
-
     with right:
         st.header("Key Statistics")
         if city in ["Zurich", "both"] and not st.session_state.filtered_counts.empty:
