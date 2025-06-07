@@ -287,7 +287,7 @@ def load_data():
 
 def setup_layout():
     st.set_page_config(page_title="Weather Visualization", layout="wide")
-    return st.columns([3, 1, 20, 1, 3])
+    return st.columns([3, 1, 20, 1, 1])
 
 def create_controls(left):
     with left:
@@ -479,6 +479,7 @@ def display_middle(middle, filtered_df, duration, start_timestamp, unit, show_ab
             representative_df = get_representative_weather(filtered_df, duration, unit)
             if show_abstract and not representative_df.empty:
                 st.subheader("Wetter")
+                st.write("Interpretation des Wetters mit icons")
                 cols = st.columns(len(representative_df))
                 for i, (col, row) in enumerate(zip(cols, representative_df.iterrows())):
                     with col:
@@ -535,20 +536,30 @@ def display_middle(middle, filtered_df, duration, start_timestamp, unit, show_ab
                 else:
                     m = display_map(cities[city], st.session_state.points)
                 st.components.v1.html(m._repr_html_(), height=600)
+                st.write("auf dieser Karte sieht man die Messstationen in Zürich. die Grösse der Kreise zeigt"
+                         "die Anzahl FussgängerInnen oder FahrradfahrerInnen, die im festgelegten Zeitraum erkannt wurden.")
             elif show_map:
                 st.warning("Map not displayed due to missing weather data.")
             if show_dataf:
                 st.subheader("Data Table")
                 st.write("Wetter")
                 st.dataframe(filtered_df[['dt', 'dt_iso', 'temp', 'humidity', 'wind_speed', 'weather_description']], use_container_width=True)
+                st.write("Wetterinformationen von OpenWeatherMap History Bulk! (gekauft)")
+                st.write(".csv pro Stadt (Zürich) und PRo Jahr (2023). Pro Stunde eine Zeile.")
+                st.write("")
                 st.write("Standorte")
                 if zurich_points_df is not None:
                     st.dataframe(zurich_points_df, use_container_width=True)
+                st.write("Die Standorte der Messstationen von OpenData Zürich.")
+                st.write("")
                 st.write("Fussgänger und Fahrradfahrer")
                 if zurich_counts_df is not None:
                     st.dataframe(zurich_counts_df, use_container_width=True)
+                st.write("Fussgänger und Fahrradfahrer")
+
         else:
             st.warning("No weather data available. Check time range or CSV data.")
+
 
 
 def display_statistics(right, city, start_timestamp, duration, unit, zurich_counts_df, show_dataf):
@@ -634,6 +645,7 @@ def main():
     city, start_timestamp, unit, int_duration, show_dataf, show_abstract, show_weather, show_weather_rain, show_weather_temp, show_weather_wind, show_map, show_line = create_controls(left)
     filtered_df = filter_data(city, wetter_Zurich, zurich_points_df, zurich_counts_df, start_timestamp, int_duration, unit)
     display_middle(middle, filtered_df, int_duration, start_timestamp, unit, show_abstract, show_weather, show_weather_rain, show_weather_temp, show_weather_wind, show_map, show_line, show_dataf, city, zurich_points_df, zurich_counts_df)
+    #display_right(right, filtered_df, int_duration, start_timestamp, unit, show_abstract, show_weather, show_weather_rain, show_weather_temp, show_weather_wind, show_map, show_line, show_dataf, city, zurich_points_df, zurich_counts_df)
     #display_statistics(right, city, start_timestamp, int_duration, unit, zurich_counts_df, show_dataf)
     # Hardcoded hourly averages DataFrame
     hourly_avg_df = pd.DataFrame({
