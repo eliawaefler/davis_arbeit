@@ -180,9 +180,10 @@ def rain_bar(rain):
 def wind_visual(wind_speed):
     max_wind = 20
     width = min(wind_speed / max_wind * 100, 100)
+    n_clouds = int(wind_speed // 5)
+    clouds = {'💨' * n_clouds}
     return f"""
-    <div style='width: {width}%; background-color: #B0C4DE; height: 10px; border-radius: 5px;'></div>
-    {'💨' * int(wind_speed // 5)}       
+    <div style='width: {width}%; background-color: #B0C4DE; height: 10px; border-radius: 5px;'></div>          
     """
 
 
@@ -315,12 +316,16 @@ def main():
         duration = int(duration[1]-duration[0]+1)
         #st.write(duration)
         #st.write(start_timestamp)
-        show_dataf = st.toggle("show data")
-        show_weather = st.toggle("show weather average")
-        if st.toggle("show weather detail", True):
-            show_weather_rain = st.toggle("show rain")
-            show_weather_temp = st.toggle("show temp")
-            show_weather_wind = st.toggle("show wind")
+        show_dataf = st.toggle("Datensatz anzeigen")
+        show_abstract = st.toggle("Dateninterpretation anzeigen")
+        if show_abstract:
+            show_weather = st.toggle("show weather average")
+            if st.toggle("show weather detail", True):
+                show_weather_rain = st.toggle("show rain")
+                show_weather_temp = st.toggle("show temp")
+                show_weather_wind = st.toggle("show wind")
+        show_map = st.toggle("Karte anzeigen")
+        show_line = st.toggle("Linienchart anzeigen")
 
         # Select and filter data
         wetter = None
@@ -366,105 +371,112 @@ def main():
     with middle:
         st.header("wie beeinflusst das Wetter die Nutzung von Verkehrsmitteln in Zürich?")
         st.write("in dieser Datenvisualisierung kann für das Jahr 2023 Wetter und Mobilitätsdaten verglichen werden.")
-        st.write("dieser Prototyp ist ein zwischenstand, es werden weitere Daten, Visualisierungen und (statistische) Auswertungen hinzugefügt.")
+
         if not filtered_df.empty:
             representative_df = get_representative_weather(filtered_df, duration, unit)
-            if not representative_df.empty:
-                st.subheader("Weather Conditions")
-                cols = st.columns(len(representative_df))
-                for i, (col, row) in enumerate(zip(cols, representative_df.iterrows())):
-                    with col:
-                        timestamp = pd.to_datetime(row[1]['dt'], unit='s')
-                        if unit == "Hours":
-                            if i == len(cols)-1:
-                                timestamp = pd.to_datetime(row[1]['dt']-3600, unit='s')
-                            label = timestamp.strftime('%H:%M')
-                        elif unit == "Days":
-                            label = timestamp.strftime('%d.%m.')
-                        else:  # Months
-                            label = timestamp.strftime('%b')
-                        st.write(label)
-                        if show_weather:
-                            emoji = get_weather_emoji(row[1]['weather_icon'])
-                            button_key = f"{emoji}_{i}"
-                            if is_dark(int(row[1]['dt'])-4*3600):
+
+            if show_abstract:
+                if not representative_df.empty:
+                    st.subheader("Weather Conditions")
+                    cols = st.columns(len(representative_df))
+                    for i, (col, row) in enumerate(zip(cols, representative_df.iterrows())):
+                        with col:
+                            timestamp = pd.to_datetime(row[1]['dt'], unit='s')
+                            if unit == "Hours":
+                                if i == len(cols)-1:
+                                    timestamp = pd.to_datetime(row[1]['dt']-3600, unit='s')
+                                label = timestamp.strftime('%H:%M')
+                            elif unit == "Days":
+                                label = timestamp.strftime('%d.%m.')
+                            else:  # Months
+                                label = timestamp.strftime('%b')
+                            st.write(label)
+                            if show_weather:
+                                emoji = get_weather_emoji(row[1]['weather_icon'])
+                                button_key = f"{emoji}_{i}"
+                                if is_dark(int(row[1]['dt'])-4*3600):
+                                    st.markdown(
+                                        f"""
+                                        <style>
+                                        .rectangle {{
+                                            width: 100px;
+                                            height: 5px;
+                                            background-color: #333333;
+                                            border-radius: 0;
+                                        }}
+                                        </style>
+                                        <div class="rectangle"></div>
+                                        """,
+                                        unsafe_allow_html=True
+                                    )
+                                else:
+                                    st.markdown(
+                                        f"""
+                                        <style>
+                                        .rectangle1 {{
+                                            width: 100px;
+                                            height: 5px;
+                                            background-color: #ffffed;
+                                            border-radius: 0;
+                                        }}
+                                        </style>
+                                        <div class="rectangle1"></div>
+                                        """,
+                                        unsafe_allow_html=True
+                                    )
+
+                                # Render button after CSS
+                                if st.button(f"{emoji}", key=button_key):
+                                    timestamp = datetime.fromtimestamp(int(row[1]['dt']) + 3600)
+                                    st.write(
+                                        f"{emoji} {timestamp.strftime('%Y-%m-%d %H:%M:%S')}: {row[1]['weather_description'].capitalize()} "
+                                        f"(Temp: {row[1]['temp']:.1f}°C, Humidity: {row[1]['humidity']}%, Wind: {row[1]['wind_speed']:.1f} m/s)"
+                                    )
+                            if show_weather_wind:
+                                wind_speed = row[1]['wind_speed']
+                                st.markdown(f"Wind: {wind_speed:.1f} m/s {wind_visual(wind_speed)}", unsafe_allow_html=True)
+
+                            if show_weather_rain:
+                                rain = row[1].get('rain_1h', 0)
+                                if rain >= 0:
+                                    st.markdown(f"{rain} mm 🌧️ {rain_bar(rain)}", unsafe_allow_html=True)
+                                else:
+                                    st.markdown(f"trocken {rain_bar(rain)}", unsafe_allow_html=True)
+
+                            if show_weather_temp:
+                                temp = row[1]['temp']
                                 st.markdown(
-                                    f"""
-                                    <style>
-                                    .rectangle {{
-                                        width: 100px;
-                                        height: 5px;
-                                        background-color: #333333;
-                                        border-radius: 0;
-                                    }}
-                                    </style>
-                                    <div class="rectangle"></div>
-                                    """,
+                                    f"<div style='{temp_to_color(temp)}; padding: 5px; border-radius: 5px;'>Temp: {temp:.1f}°C 🌡️</div>",
                                     unsafe_allow_html=True
                                 )
-                            else:
-                                st.markdown(
-                                    f"""
-                                    <style>
-                                    .rectangle1 {{
-                                        width: 100px;
-                                        height: 5px;
-                                        background-color: #ffffed;
-                                        border-radius: 0;
-                                    }}
-                                    </style>
-                                    <div class="rectangle1"></div>
-                                    """,
-                                    unsafe_allow_html=True
-                                )
-
-                            # Render button after CSS
-                            if st.button(f"{emoji}", key=button_key):
-                                timestamp = datetime.fromtimestamp(int(row[1]['dt']) + 3600)
-                                st.write(
-                                    f"{emoji} {timestamp.strftime('%Y-%m-%d %H:%M:%S')}: {row[1]['weather_description'].capitalize()} "
-                                    f"(Temp: {row[1]['temp']:.1f}°C, Humidity: {row[1]['humidity']}%, Wind: {row[1]['wind_speed']:.1f} m/s)"
-                                )
-                        if show_weather_wind:
-                            wind_speed = row[1]['wind_speed']
-                            st.markdown(f"Wind: {wind_speed:.1f} m/s {wind_visual(wind_speed)}", unsafe_allow_html=True)
-
-                        if show_weather_rain:
-                            rain = row[1].get('rain_1h', 0)
-                            if rain >= 0:
-                                st.markdown(f"{rain} mm 🌧️ {rain_bar(rain)}", unsafe_allow_html=True)
-                            else:
-                                st.markdown(f"trocken {rain_bar(rain)}", unsafe_allow_html=True)
-
-                        if show_weather_temp:
-                            temp = row[1]['temp']
-                            st.markdown(
-                                f"<div style='{temp_to_color(temp)}; padding: 5px; border-radius: 5px;'>Temp: {temp:.1f}°C 🌡️</div>",
-                                unsafe_allow_html=True
-                            )
+            if show_line:
+                st.subheader("Linienchart")
+                st.line_chart()
+            if show_map:
+                st.subheader("Karte")
+                if not filtered_df.empty:
+                    if city == "both":
+                        center = [(cities["Bern"][0] + cities["Zurich"][0]) / 2,
+                                  (cities["Bern"][1] + cities["Zurich"][1]) / 2]
+                        m = display_map(center, st.session_state.points, zoom=9)
+                        folium.Marker(cities["Bern"], popup="Bern").add_to(m)
+                        folium.Marker(cities["Zurich"], popup="Zurich").add_to(m)
+                    else:
+                        m = display_map(cities[city], st.session_state.points)
+                    st.components.v1.html(m._repr_html_(), height=600)
+                else:
+                    st.warning("Map not displayed due to missing weather data.")
+            if show_dataf:
+                st.subheader("Data Table")
+                st.dataframe(filtered_df[['dt', 'dt_iso', 'temp', 'humidity', 'wind_speed', 'weather_description']],
+                             use_container_width=True)
+                if zurich_points_df is not None:
+                    st.dataframe(zurich_points_df, use_container_width=True)
+                if zurich_counts_df is not None:
+                    st.dataframe(zurich_counts_df, use_container_width=True)
         else:
             st.warning("No weather data available. Check time range or CSV data.")
-        st.subheader("karte")
-        if not filtered_df.empty:
-            if city == "both":
-                center = [(cities["Bern"][0] + cities["Zurich"][0]) / 2,
-                          (cities["Bern"][1] + cities["Zurich"][1]) / 2]
-                m = display_map(center, st.session_state.points, zoom=9)
-                folium.Marker(cities["Bern"], popup="Bern").add_to(m)
-                folium.Marker(cities["Zurich"], popup="Zurich").add_to(m)
-            else:
-                m = display_map(cities[city], st.session_state.points)
-            st.components.v1.html(m._repr_html_(), height=600)
-        else:
-            st.warning("Map not displayed due to missing weather data.")
-        if show_dataf:
-            st.subheader("Data Table")
-            st.dataframe(filtered_df[['dt', 'dt_iso', 'temp', 'humidity', 'wind_speed', 'weather_description']],
-                         use_container_width=True)
-            if zurich_points_df is not None:
-                st.dataframe(zurich_points_df, use_container_width=True)
-            if zurich_counts_df is not None:
-                st.dataframe(zurich_counts_df, use_container_width=True)
+
     with right:
         st.header("Key Statistics")
         if city in ["Zurich", "both"] and not st.session_state.filtered_counts.empty:
