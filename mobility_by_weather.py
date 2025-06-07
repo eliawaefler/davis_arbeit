@@ -556,7 +556,7 @@ def display_middle(middle, filtered_df, duration, start_timestamp, unit, show_ab
                 st.write("Fussgänger und Fahrradfahrer")
                 if zurich_counts_df is not None:
                     st.dataframe(zurich_counts_df, use_container_width=True)
-                st.write("Fussgänger und Fahrradfahrer datenset der Stadt Zürich. csv mit Zielen pro Stunde und Messstation.
+                st.write("Fussgänger und Fahrradfahrer datenset der Stadt Zürich. csv mit Zielen pro Stunde und Messstation."
                          "https://data.stadt-zuerich.ch/dataset/ted_taz_verkehrszaehlungen_werte_fussgaenger_velo/download/2023_verkehrszaehlungen_werte_fussgaenger_velo.csv")
 
         else:
