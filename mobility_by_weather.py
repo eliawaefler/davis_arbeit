@@ -300,14 +300,14 @@ def create_controls(left):
         duration = st.select_slider('Zeitraum', range(0, 24), value=(13, 14))
         start_timestamp += duration[0]*3600+3600
         duration = int(duration[1]-duration[0]+1)
-        show_abstract = st.toggle("Dateninterpretation anzeigen")
+        show_abstract = st.toggle("Wetter Interpretation anzeigen")
         show_weather = show_weather_rain = show_weather_temp = show_weather_wind = False
         if show_abstract:
-            show_weather = st.toggle("show weather average")
-            if st.toggle("show weather detail", True):
-                show_weather_rain = st.toggle("show rain")
-                show_weather_temp = st.toggle("show temp")
-                show_weather_wind = st.toggle("show wind")
+            show_weather = st.toggle("Wetter Interpretation gesamt")
+            if st.toggle("Wetter Interpretation Detail", True):
+                show_weather_rain = st.toggle("Regen")
+                show_weather_temp = st.toggle("Temperatur")
+                show_weather_wind = st.toggle("Wind")
         show_map = st.toggle("Karte anzeigen")
         show_line = st.toggle("Linienchart anzeigen")
         show_dataf = st.toggle("Datensatz anzeigen")
