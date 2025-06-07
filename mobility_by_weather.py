@@ -291,7 +291,7 @@ def setup_layout():
 
 def create_controls(left):
     with left:
-        st.header("Controls")
+        st.subheader("Controls")
         city = "Zurich"
         start_date = st.date_input("Start date", value=datetime(2023, 1, 1))
         start_datetime = datetime(start_date.year, start_date.month, start_date.day, 1)
