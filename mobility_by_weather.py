@@ -1,10 +1,3 @@
-"""
-CAS Datenvisualisierung und Statistik Arbeit von Elia Wäfler
-proudly created with help from GROK.
-"""
-
-
-
 import pandas as pd
 import streamlit as st
 import os
@@ -76,32 +69,27 @@ def load_mobility_data(file_path):
 
 
 def is_dark(timestamp: int) -> bool:
-    # Convert timestamp to Zurich datetime (UTC+1, no DST adjustment here)
-    dt = datetime.fromtimestamp(timestamp + 3600*2)  # Add 1 hour for CET
-
-    # Get month and hour
+    dt = datetime.fromtimestamp(timestamp + 7200)  # Add 2 hours for CEST
     month = dt.month
     hour = dt.hour
-
-    # Define sunrise/sunset times (approximate for Zurich)
     sunrise = 8 if month in [11, 12, 1, 2] else 7 if month in [3, 4, 9, 10] else 6
     sunset = 18 if month in [11, 12, 1, 2] else 19 if month in [3, 4, 9, 10] else 21
-
-    # Check if time is before sunrise or after sunset
     return hour < sunrise or hour >= sunset
 
 
-def filter_weather_data(df, start_timestamp, duration, unit):
+def filter_weather_data(df, start_timestamp, duration, unit, selected_hour=None):
     if df is not None and not df.empty:
         if unit == "Hours":
             end_timestamp = start_timestamp + duration * 3600
-        elif unit == "Days":
-            end_timestamp = start_timestamp + duration * 86400
-        else:  # Months
+            filtered = df[(df['dt'] >= start_timestamp) & (df['dt'] <= end_timestamp)]
+        else:  # Days
             start_date = datetime.fromtimestamp(start_timestamp)
-            end_date = (start_date + pd.offsets.MonthBegin(duration)).timestamp()
-            end_timestamp = int(end_date)
-        filtered = df[(df['dt'] >= start_timestamp) & (df['dt'] <= end_timestamp)]
+            end_date = start_date + timedelta(days=duration - 1)
+            end_timestamp = int(end_date.timestamp() + 86399)  # End of day
+            filtered = df[(df['dt'] >= start_timestamp) & (df['dt'] <= end_timestamp)]
+            if selected_hour is not None:
+                filtered['datetime'] = pd.to_datetime(filtered['dt'], unit='s')
+                filtered = filtered[filtered['datetime'].dt.hour == selected_hour]
         return filtered
     return pd.DataFrame()
 
@@ -109,21 +97,7 @@ def filter_weather_data(df, start_timestamp, duration, unit):
 def get_representative_weather(df, duration, unit):
     if df.empty:
         return df
-    if unit == "Months":
-        df['date'] = pd.to_datetime(df['dt'], unit='s').dt.date
-        daily = df.groupby('date').agg({
-            'temp': 'mean',
-            'humidity': 'mean',
-            'wind_speed': 'mean',
-            'weather_icon': lambda x: x.mode().iloc[0] if not x.mode().empty else x.iloc[0],
-            'weather_description': lambda x: x.mode().iloc[0] if not x.mode().empty else x.iloc[0],
-            'dt': 'first'
-        }).reset_index()
-        if len(daily) > duration:
-            indices = np.linspace(0, len(daily) - 1, duration, dtype=int)
-            daily = daily.iloc[indices]
-        return daily
-    elif unit == "Days":
+    if unit == "Days":
         df['date'] = pd.to_datetime(df['dt'], unit='s').dt.date
         daily = df.groupby('date').agg({
             'temp': 'mean',
@@ -183,43 +157,44 @@ def wind_visual(wind_speed):
     max_wind = 20
     width = min(wind_speed / max_wind * 100, 100)
     n_clouds = int(wind_speed // 5)
-    clouds = {'💨' * n_clouds}
+    clouds = '💨' * n_clouds
     return f"""
-    <div style='width: {width}%; background-color: #B0C4DE; height: 10px; border-radius: 5px;'></div>          
+    <div style='width: {width}%; background-color: #B0C4DE; height: 10px; border-radius: 5px;'></div>
+    {clouds}
     """
 
+
 def get_name(points_df, fk_number):
-    #st.dataframe(points_df)
     for i, p in points_df.iterrows():
         if str(p[4]) == str(fk_number):
             return str(p[1])
+    return "Unknown"
 
-def process_traffic_data(points_df, counts_df, start_timestamp, duration, unit):
+
+def process_traffic_data(points_df, counts_df, start_timestamp, duration, unit, selected_hour=None):
     if points_df is None or counts_df is None:
         return []
 
-    # Convert DATUM to timestamp
     counts_df['DATUM'] = pd.to_datetime(counts_df['DATUM']).apply(lambda x: int(x.timestamp()))
 
-    # Filter counts by time range
     if unit == "Hours":
         end_timestamp = start_timestamp + duration * 3600
-    elif unit == "Days":
-        end_timestamp = start_timestamp + duration * 86400
-    else:  # Months
+        filtered_counts = counts_df[(counts_df['DATUM'] >= start_timestamp) & (counts_df['DATUM'] <= end_timestamp)]
+    else:  # Days
         start_date = datetime.fromtimestamp(start_timestamp)
-        end_date = (start_date + pd.offsets.MonthBegin(duration)).timestamp()
-        end_timestamp = int(end_date)
+        end_date = start_date + timedelta(days=duration - 1)
+        end_timestamp = int(end_date.timestamp() + 86399)
+        filtered_counts = counts_df[(counts_df['DATUM'] >= start_timestamp) & (counts_df['DATUM'] <= end_timestamp)]
+        if selected_hour is not None:
+            filtered_counts['datetime'] = pd.to_datetime(filtered_counts['DATUM'], unit='s')
+            filtered_counts = filtered_counts[filtered_counts['datetime'].dt.hour == selected_hour]
 
-    filtered_counts = counts_df[(counts_df['DATUM'] >= start_timestamp) & (counts_df['DATUM'] <= end_timestamp)]
-
-    # Aggregate traffic by FK_STANDORT
     traffic = filtered_counts.groupby('FK_STANDORT').agg({
         'VELO_IN': 'sum',
         'VELO_OUT': 'sum',
         'FUSS_IN': 'sum',
         'FUSS_OUT': 'sum',
-        'OST': 'first',  # Take first coordinate for consistency
+        'OST': 'first',
         'NORD': 'first'
     }).reset_index()
 
@@ -228,7 +203,6 @@ def process_traffic_data(points_df, counts_df, start_timestamp, duration, unit):
                                traffic['FUSS_IN'].fillna(0) +
                                traffic['FUSS_OUT'].fillna(0))
 
-    # Normalize traffic for scaling (0 to 1)
     max_traffic = traffic['total_traffic'].max() if traffic['total_traffic'].max() > 0 else 1
     traffic['traffic_norm'] = traffic['total_traffic'] / max_traffic
 
@@ -236,13 +210,8 @@ def process_traffic_data(points_df, counts_df, start_timestamp, duration, unit):
     for _, traffic_row in traffic.iterrows():
         easting, northing = traffic_row['OST'], traffic_row['NORD']
         lat, lon = swiss_to_wgs84(easting, northing)
-
-        # Match FK_STANDORT with fk_zaehler for popup name
         standort = str(traffic_row['FK_STANDORT'])
-        #point_row = points_df[points_df['fk_zaehler'].astype(str) == standort]
-
         bezeichnung = get_name(points_df, str(int(standort[:-2])))
-
         total_traffic = traffic_row['total_traffic']
         traffic_norm = traffic_row['traffic_norm']
 
@@ -250,11 +219,9 @@ def process_traffic_data(points_df, counts_df, start_timestamp, duration, unit):
             color = 'grey'
             radius = 3
         else:
-            # Interpolate color from blue (low) to red (high)
             blue = int(255 * (1 - traffic_norm))
             red = int(255 * traffic_norm)
             color = f'rgb({red}, 0, {blue})'
-            # Scale radius from 5 to 15
             radius = 5 + 10 * traffic_norm
 
         popup = f"Standort {bezeichnung}: {total_traffic:.0f} (Velo: {traffic_row['VELO_IN']:.0f}/{traffic_row['VELO_OUT']:.0f}, Fuss: {traffic_row['FUSS_IN']:.0f}/{traffic_row['FUSS_OUT']:.0f})"
@@ -268,11 +235,13 @@ def process_traffic_data(points_df, counts_df, start_timestamp, duration, unit):
 
     return points
 
+
 def initialize_session_state():
     if 'points' not in st.session_state:
         st.session_state.points = []
     if 'filtered_counts' not in st.session_state:
         st.session_state.filtered_counts = pd.DataFrame()
+
 
 def load_data():
     default_path_zurich = "zurich_wetter.csv"
@@ -285,9 +254,11 @@ def load_data():
     zurich_counts_df = pd.concat([zurich_counts_df_1, zurich_counts_df_2, zurich_counts_df_3], ignore_index=True)
     return wetter_Zurich, zurich_points_df, zurich_counts_df
 
+
 def setup_layout():
     st.set_page_config(page_title="Weather Visualization", layout="wide")
     return st.columns([3, 1, 20, 1, 1])
+
 
 def create_controls(left):
     with left:
@@ -296,10 +267,16 @@ def create_controls(left):
         start_date = st.date_input("Start date", value=datetime(2023, 1, 1))
         start_datetime = datetime(start_date.year, start_date.month, start_date.day, 1)
         start_timestamp = int(start_datetime.timestamp())
-        unit = "Hours"
-        duration = st.select_slider('Zeitraum', range(0, 24), value=(13, 14))
-        start_timestamp += duration[0]*3600+3600
-        duration = int(duration[1]-duration[0]+1)
+        unit = st.toggle("Compare Days", value=False) and "Days" or "Hours"
+        if unit == "Hours":
+            duration = st.select_slider('Zeitraum', range(0, 24), value=(13, 14))
+            start_timestamp += duration[0] * 3600 + 3600
+            duration = int(duration[1] - duration[0] + 1)
+            selected_hour = None
+        else:
+            selected_hour = st.selectbox("Select Hour", range(0, 24), format_func=lambda x: f"{x:02d}:00")
+            duration = st.number_input("Number of Days (1-20)", min_value=1, max_value=20, value=7)
+            start_timestamp += selected_hour * 3600
         show_abstract = st.toggle("Wetter Interpretation anzeigen")
         show_weather = show_weather_rain = show_weather_temp = show_weather_wind = False
         if show_abstract:
@@ -312,29 +289,41 @@ def create_controls(left):
         show_line = st.toggle("Linienchart anzeigen")
         show_dataf = st.toggle("Datensatz anzeigen")
 
-        return city, start_timestamp, unit, duration, show_dataf, show_abstract, show_weather, show_weather_rain, show_weather_temp, show_weather_wind, show_map, show_line
+        return city, start_timestamp, unit, duration, selected_hour, show_dataf, show_abstract, show_weather, show_weather_rain, show_weather_temp, show_weather_wind, show_map, show_line
 
-def filter_data(city, wetter_Zurich, zurich_points_df, zurich_counts_df, start_timestamp, duration, unit):
+
+def filter_data(city, wetter_Zurich, zurich_points_df, zurich_counts_df, start_timestamp, duration, unit, selected_hour):
     wetter = wetter_Zurich if city == "Zurich" and wetter_Zurich is not None else pd.DataFrame()
     if wetter.empty:
         st.error(f"No data available for {city}. Check CSV files.")
         filtered_df = pd.DataFrame()
     else:
-        filtered_df = filter_weather_data(wetter, start_timestamp, duration, unit)
+        filtered_df = filter_weather_data(wetter, start_timestamp, duration, unit, selected_hour)
         st.session_state.points = []
         st.session_state.filtered_counts = pd.DataFrame()
         if city in ["Zurich", "both"] and zurich_points_df is not None and zurich_counts_df is not None:
             counts_df = zurich_counts_df.copy()
             counts_df['DATUM'] = pd.to_datetime(counts_df['DATUM']).apply(lambda x: int(x.timestamp()))
-            end_timestamp = start_timestamp + duration * 3600
-            st.session_state.filtered_counts = counts_df[(counts_df['DATUM'] >= start_timestamp) & (counts_df['DATUM'] <= end_timestamp)]
-            st.session_state.points = process_traffic_data(zurich_points_df, zurich_counts_df, start_timestamp, duration, unit)
+            if unit == "Hours":
+                end_timestamp = start_timestamp + duration * 3600
+                st.session_state.filtered_counts = counts_df[(counts_df['DATUM'] >= start_timestamp) & (counts_df['DATUM'] <= end_timestamp)]
+            else:
+                start_date = datetime.fromtimestamp(start_timestamp)
+                end_date = start_date + timedelta(days=duration - 1)
+                end_timestamp = int(end_date.timestamp() + 86399)
+                filtered_counts = counts_df[(counts_df['DATUM'] >= start_timestamp) & (counts_df['DATUM'] <= end_timestamp)]
+                if selected_hour is not None:
+                    filtered_counts['datetime'] = pd.to_datetime(filtered_counts['DATUM'], unit='s')
+                    filtered_counts = filtered_counts[filtered_counts['datetime'].dt.hour == selected_hour]
+                st.session_state.filtered_counts = filtered_counts
+            st.session_state.points = process_traffic_data(zurich_points_df, zurich_counts_df, start_timestamp, duration, unit, selected_hour)
         elif city == "Bern":
             city_coords = [46.9480, 7.4474]
             st.session_state.points = [{"coords": [city_coords[0], city_coords[1]], "color": "grey", "radius": 3, "popup": "Bern: No traffic data"}]
     return filtered_df
 
-def create_line_chart_(filtered_df, filtered_counts, start_timestamp, duration):
+
+def create_line_chart(filtered_df, filtered_counts, start_timestamp, duration, unit, selected_hour):
     if filtered_df.empty or filtered_counts.empty:
         return
     df = filtered_df.copy()
@@ -343,84 +332,45 @@ def create_line_chart_(filtered_df, filtered_counts, start_timestamp, duration):
     counts_df['datetime'] = pd.to_datetime(counts_df['DATUM'], unit='s')
     counts_df['cyclists'] = counts_df['VELO_IN'].fillna(0) + counts_df['VELO_OUT'].fillna(0)
     counts_df['pedestrians'] = counts_df['FUSS_IN'].fillna(0) + counts_df['FUSS_OUT'].fillna(0)
-    hourly_counts = counts_df.groupby(counts_df['datetime'].dt.floor('H')).agg({
-        'cyclists': 'sum',
-        'pedestrians': 'sum'
-    }).reset_index()
-    df = df.set_index('datetime').resample('H').mean(numeric_only=True).reset_index()
-    merged_df = pd.merge_asof(
-        df.sort_values('datetime'),
-        hourly_counts.sort_values('datetime'),
-        on='datetime',
-        direction='nearest'
-    )
-    merged_df['hour'] = merged_df['datetime'].dt.strftime('%H:%M')
+
+    if unit == "Hours":
+        hourly_counts = counts_df.groupby(counts_df['datetime'].dt.floor('H')).agg({
+            'cyclists': 'sum',
+            'pedestrians': 'sum'
+        }).reset_index()
+        df = df.set_index('datetime').resample('H').mean(numeric_only=True).reset_index()
+        merged_df = pd.merge_asof(
+            df.sort_values('datetime'),
+            hourly_counts.sort_values('datetime'),
+            on='datetime',
+            direction='nearest'
+        )
+        merged_df['label'] = merged_df['datetime'].dt.strftime('%H:%M')
+    else:
+        daily_counts = counts_df.groupby(counts_df['datetime'].dt.date).agg({
+            'cyclists': 'sum',
+            'pedestrians': 'sum'
+        }).reset_index()
+        daily_counts['datetime'] = pd.to_datetime(daily_counts['datetime'])
+        df['date'] = df['datetime'].dt.date
+        daily_weather = df.groupby('date').agg({
+            'temp': 'mean',
+            'humidity': 'mean',
+            'wind_speed': 'mean'
+        }).reset_index()
+        daily_weather['datetime'] = pd.to_datetime(daily_weather['date'])
+        merged_df = pd.merge_asof(
+            daily_weather.sort_values('datetime'),
+            daily_counts.sort_values('datetime'),
+            on='datetime',
+            direction='nearest'
+        )
+        merged_df['label'] = merged_df['datetime'].dt.strftime('%Y-%m-%d')
+
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=merged_df['hour'],
+        x=merged_df['label'],
         y=merged_df['temp'],
-        name='Temperature (°C)',
-        yaxis='y1',
-        line=dict(color='red')
-    ))
-    fig.add_trace(go.Scatter(
-        x=merged_df['hour'],
-        y=merged_df['cyclists'],
-        name='Cyclists',
-        yaxis='y2',
-        line=dict(color='blue')
-    ))
-    fig.add_trace(go.Scatter(
-        x=merged_df['hour'],
-        y=merged_df['pedestrians'],
-        name='Pedestrians',
-        yaxis='y2',
-        line=dict(color='green')
-    ))
-    fig.update_layout(
-        title='Temperature, Cyclists, and Pedestrians Over Time',
-        xaxis=dict(title='Hour'),
-        yaxis=dict(
-            title=dict(text='Temperature (°C)', font=dict(color='red')),
-            tickfont=dict(color='red')
-        ),
-        yaxis2=dict(
-            title=dict(text='Count', font=dict(color='blue')),
-            tickfont=dict(color='blue'),
-            overlaying='y',
-            side='right'
-        ),
-        legend=dict(x=0.01, y=0.99),
-        height=600
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def create_line_chart(filtered_df, filtered_counts, start_timestamp, duration):
-    if filtered_df.empty or filtered_counts.empty:
-        return
-    df = filtered_df.copy()
-    df['datetime'] = pd.to_datetime(df['dt'], unit='s')
-    counts_df = filtered_counts.copy()
-    counts_df['datetime'] = pd.to_datetime(counts_df['DATUM'], unit='s')
-    counts_df['cyclists'] = counts_df['VELO_IN'].fillna(0) + counts_df['VELO_OUT'].fillna(0)
-    counts_df['pedestrians'] = counts_df['FUSS_IN'].fillna(0) + counts_df['FUSS_OUT'].fillna(0)
-    hourly_counts = counts_df.groupby(counts_df['datetime'].dt.floor('H')).agg({
-        'cyclists': 'sum',
-        'pedestrians': 'sum'
-    }).reset_index()
-    df = df.set_index('datetime').resample('H').mean(numeric_only=True).reset_index()
-    merged_df = pd.merge_asof(
-        df.sort_values('datetime'),
-        hourly_counts.sort_values('datetime'),
-        on='datetime',
-        direction='nearest'
-    )
-    merged_df['hour'] = merged_df['datetime'].dt.strftime('%H:%M')
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=merged_df['hour'][:-1],
-        y=merged_df['temp'][:-1],
         name='Temperature (°C)',
         yaxis='y1',
         line=dict(color='red'),
@@ -428,8 +378,8 @@ def create_line_chart(filtered_df, filtered_counts, start_timestamp, duration):
         connectgaps=False
     ))
     fig.add_trace(go.Scatter(
-        x=merged_df['hour'][:-1],
-        y=merged_df['cyclists'][:-1],
+        x=merged_df['label'],
+        y=merged_df['cyclists'],
         name='Cyclists',
         yaxis='y2',
         line=dict(color='blue'),
@@ -437,8 +387,8 @@ def create_line_chart(filtered_df, filtered_counts, start_timestamp, duration):
         connectgaps=False
     ))
     fig.add_trace(go.Scatter(
-        x=merged_df['hour'][:-1],
-        y=merged_df['pedestrians'][:-1],
+        x=merged_df['label'],
+        y=merged_df['pedestrians'],
         name='Pedestrians',
         yaxis='y2',
         line=dict(color='green'),
@@ -449,7 +399,7 @@ def create_line_chart(filtered_df, filtered_counts, start_timestamp, duration):
     fig.update_layout(
         title='Vergleich von Temperatur (°C) zu Anzahl Fussgänger und Anzahl Fahrradfahrern',
         xaxis=dict(
-            title='Hour',
+            title='Hour' if unit == "Hours" else 'Date',
             showgrid=False
         ),
         yaxis=dict(
@@ -464,12 +414,13 @@ def create_line_chart(filtered_df, filtered_counts, start_timestamp, duration):
             showgrid=False
         ),
         legend=dict(x=0.01, y=0.99),
-        height=600)
+        height=600
+    )
 
     st.plotly_chart(fig, use_container_width=True)
 
 
-def display_middle(middle, filtered_df, duration, start_timestamp, unit, show_abstract, show_weather, show_weather_rain,
+def display_middle(middle, filtered_df, duration, start_timestamp, unit, selected_hour, show_abstract, show_weather, show_weather_rain,
                    show_weather_temp, show_weather_wind, show_map, show_line, show_dataf, city, zurich_points_df, zurich_counts_df):
     cities = {"Bern": [46.9480, 7.4474], "Zurich": [47.3769, 8.5417]}
     with middle:
@@ -484,9 +435,7 @@ def display_middle(middle, filtered_df, duration, start_timestamp, unit, show_ab
                 for i, (col, row) in enumerate(zip(cols, representative_df.iterrows())):
                     with col:
                         timestamp = pd.to_datetime(row[1]['dt'], unit='s')
-                        label = timestamp.strftime('%H:%M' if unit == "Hours" else '%d.%m.' if unit == "Days" else '%b')
-                        if unit == "Hours" and i == len(cols)-1:
-                            timestamp = pd.to_datetime(row[1]['dt']-3600, unit='s')
+                        label = timestamp.strftime('%H:%M' if unit == "Hours" else '%d.%m.')
                         st.write(label)
                         if show_weather:
                             emoji = get_weather_emoji(row[1]['weather_icon'])
@@ -525,7 +474,7 @@ def display_middle(middle, filtered_df, duration, start_timestamp, unit, show_ab
                             )
             if show_line:
                 st.subheader("Vergleich von Temperatur (°C) zu Anzahl Fussgänger und Anzahl Fahrradfahrern")
-                create_line_chart(filtered_df, st.session_state.filtered_counts, start_timestamp, duration)
+                create_line_chart(filtered_df, st.session_state.filtered_counts, start_timestamp, duration, unit, selected_hour)
             if show_map and not filtered_df.empty:
                 st.subheader("Karte")
                 if city == "both":
@@ -563,16 +512,14 @@ def display_middle(middle, filtered_df, duration, start_timestamp, unit, show_ab
             st.warning("No weather data available. Check time range or CSV data.")
 
 
-
-def display_statistics(right, city, start_timestamp, duration, unit, zurich_counts_df, show_dataf):
+def display_statistics(right, city, start_timestamp, duration, unit, selected_hour, zurich_counts_df, show_dataf):
     with right:
         st.header("Key Statistics")
         if city in ["Zurich", "both"] and not st.session_state.filtered_counts.empty:
             filtered_counts = st.session_state.filtered_counts
             total_pedestrians = filtered_counts['FUSS_IN'].fillna(0).sum() + filtered_counts['FUSS_OUT'].fillna(0).sum()
             total_cyclists = filtered_counts['VELO_IN'].fillna(0).sum() + filtered_counts['VELO_OUT'].fillna(0).sum()
-            end_timestamp = start_timestamp + duration * 3600
-            timespan_hours = (end_timestamp - start_timestamp) / 3600
+            timespan_hours = duration if unit == "Hours" else duration  # 1 hour per day
             avg_pedestrians = total_pedestrians / timespan_hours if timespan_hours > 0 else 0
             avg_cyclists = total_cyclists / timespan_hours if timespan_hours > 0 else 0
 
@@ -585,13 +532,11 @@ def display_statistics(right, city, start_timestamp, duration, unit, zurich_coun
                 year_counts = zurich_counts_df.copy()
                 year_counts['DATUM_DT'] = pd.to_datetime(year_counts['DATUM'])
                 year_counts['HOUR'] = year_counts['DATUM_DT'].dt.hour
-                start_hour = start_timestamp
-                end_hour = start_timestamp + duration
-                yearly_time_counts = year_counts[year_counts['HOUR'].between(start_hour, end_hour)]
+                yearly_time_counts = year_counts[year_counts['HOUR'] == (selected_hour if unit == "Days" else year_counts['HOUR'])]
                 total_year_peds = yearly_time_counts['FUSS_IN'].fillna(0).sum() + yearly_time_counts['FUSS_OUT'].fillna(0).sum()
                 total_year_cycs = yearly_time_counts['VELO_IN'].fillna(0).sum() + yearly_time_counts['VELO_OUT'].fillna(0).sum()
                 days_in_year = 365
-                hours_per_day = (end_hour - start_hour + 1)
+                hours_per_day = 1 if unit == "Days" else 24
                 total_hours = days_in_year * hours_per_day
                 avg_year_peds = total_year_peds / total_hours if total_hours > 0 else 0
                 avg_year_cycs = total_year_cycs / total_hours if total_hours > 0 else 0
@@ -604,7 +549,7 @@ def display_statistics(right, city, start_timestamp, duration, unit, zurich_coun
                 time_counts = zurich_counts_df.copy()
                 time_counts['DATUM_DT'] = pd.to_datetime(time_counts['DATUM'])
                 time_counts['time_key'] = time_counts['DATUM_DT'].dt.hour
-                start_hour = datetime.fromtimestamp(start_timestamp).hour
+                start_hour = selected_hour if unit == "Days" else datetime.fromtimestamp(start_timestamp).hour
                 time_avg = time_counts[time_counts['time_key'] == start_hour].groupby('time_key').agg({
                     'FUSS_IN': 'sum', 'FUSS_OUT': 'sum', 'VELO_IN': 'sum', 'VELO_OUT': 'sum'
                 })
@@ -629,42 +574,19 @@ def display_statistics(right, city, start_timestamp, duration, unit, zurich_coun
 
             if show_dataf:
                 pass
-                """
-                st.subheader("Average Pedestrians and Cyclists by Hour of Day")
-                st.dataframe(hourly_avg_df.style.format({
-                    'PEDESTRIANS': '{:,.1f}',
-                    'CYCLISTS': '{:,.1f}',
-                    'HOUR': '{:d}'
-                }), use_container_width=True)
-                """
         else:
             st.markdown("No mobility data available for the selected city or time range.")
+
 
 def main():
     initialize_session_state()
     wetter_Zurich, zurich_points_df, zurich_counts_df = load_data()
     left, _, middle, _, right = setup_layout()
-    city, start_timestamp, unit, int_duration, show_dataf, show_abstract, show_weather, show_weather_rain, show_weather_temp, show_weather_wind, show_map, show_line = create_controls(left)
-    filtered_df = filter_data(city, wetter_Zurich, zurich_points_df, zurich_counts_df, start_timestamp, int_duration, unit)
-    display_middle(middle, filtered_df, int_duration, start_timestamp, unit, show_abstract, show_weather, show_weather_rain, show_weather_temp, show_weather_wind, show_map, show_line, show_dataf, city, zurich_points_df, zurich_counts_df)
-    #display_right(right, filtered_df, int_duration, start_timestamp, unit, show_abstract, show_weather, show_weather_rain, show_weather_temp, show_weather_wind, show_map, show_line, show_dataf, city, zurich_points_df, zurich_counts_df)
-    #display_statistics(right, city, start_timestamp, int_duration, unit, zurich_counts_df, show_dataf)
-    # Hardcoded hourly averages DataFrame
-    hourly_avg_df = pd.DataFrame({
-        'HOUR': list(range(24)),
-        'PEDESTRIANS': [
-            33.082877, 18.028082, 12.176511, 8.149315, 7.815753, 13.467123, 39.016438, 96.151370,
-            133.253425, 129.134932, 155.736986, 211.797945, 279.871233, 267.652055, 268.368493,
-            273.584932, 290.453425, 309.326027, 268.673973, 184.763699, 131.844521, 105.811644,
-            91.679452, 62.532877
-        ],
-        'CYCLISTS': [
-            89.842466, 48.247945, 30.392857, 20.201370, 18.921918, 47.866438, 180.135616, 507.241096,
-            696.415753, 402.367808, 325.613014, 374.406849, 418.848630, 429.432192, 396.541781,
-            425.765068, 543.806849, 810.130137, 787.923288, 516.699315, 354.093836, 274.828082,
-            232.952055, 161.209589
-        ]
-    })
+    city, start_timestamp, unit, duration, selected_hour, show_dataf, show_abstract, show_weather, show_weather_rain, show_weather_temp, show_weather_wind, show_map, show_line = create_controls(left)
+    filtered_df = filter_data(city, wetter_Zurich, zurich_points_df, zurich_counts_df, start_timestamp, duration, unit, selected_hour)
+    display_middle(middle, filtered_df, duration, start_timestamp, unit, selected_hour, show_abstract, show_weather, show_weather_rain, show_weather_temp, show_weather_wind, show_map, show_line, show_dataf, city, zurich_points_df, zurich_counts_df)
+    #display_statistics(right, city, start_timestamp, duration, unit, selected_hour, zurich_counts_df, show_dataf)
+
 
 if __name__ == '__main__':
     main()
