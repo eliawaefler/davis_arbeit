@@ -550,12 +550,14 @@ def display_middle(middle, filtered_df, duration, start_timestamp, unit, show_ab
                 st.write("Standorte")
                 if zurich_points_df is not None:
                     st.dataframe(zurich_points_df, use_container_width=True)
-                st.write("Die Standorte der Messstationen von OpenData Zürich.")
+                st.write("Die Standorte der Messstationen von OpenData Zürich. csv imt einer Zeile pro Standort."
+                         "URL: https://www.stadt-zuerich.ch/geodaten/download/Standorte_der_automatischen_Fuss__und_Velozaehlungen?format=10008")
                 st.write("")
                 st.write("Fussgänger und Fahrradfahrer")
                 if zurich_counts_df is not None:
                     st.dataframe(zurich_counts_df, use_container_width=True)
-                st.write("Fussgänger und Fahrradfahrer")
+                st.write("Fussgänger und Fahrradfahrer datenset der Stadt Zürich. csv mit Zielen pro Stunde und Messstation.
+                         "https://data.stadt-zuerich.ch/dataset/ted_taz_verkehrszaehlungen_werte_fussgaenger_velo/download/2023_verkehrszaehlungen_werte_fussgaenger_velo.csv")
 
         else:
             st.warning("No weather data available. Check time range or CSV data.")
