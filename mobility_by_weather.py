@@ -270,7 +270,7 @@ def create_controls(left):
         unit = st.toggle("Compare Days", value=False) and "Days" or "Hours"
         if unit == "Hours":
             duration = st.select_slider('Zeitraum', range(0, 24), value=(13, 14))
-            start_timestamp += duration[0] * 3600 + 3600
+            start_timestamp += duration[0] * 3600 - 3600
             duration = int(duration[1] - duration[0] + 1)
             selected_hour = None
         else:
@@ -324,6 +324,7 @@ def filter_data(city, wetter_Zurich, zurich_points_df, zurich_counts_df, start_t
 
 
 def create_line_chart(filtered_df, filtered_counts, start_timestamp, duration, unit, selected_hour):
+    start_timestamp += 3600
     if filtered_df.empty or filtered_counts.empty:
         return
     df = filtered_df.copy()
