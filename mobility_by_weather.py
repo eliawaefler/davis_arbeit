@@ -4,6 +4,7 @@ proudly created with help from GROK.
 """
 
 
+
 import pandas as pd
 import streamlit as st
 import os
@@ -11,16 +12,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import folium
 from pyproj import Transformer
-import pandas as pd
-import streamlit as st
-import os
-from datetime import datetime, timedelta
-import numpy as np
-import folium
-from pyproj import Transformer
-import plotly.express as px
 import plotly.graph_objects as go
-import plotly.express as px
 
 
 def swiss_to_wgs84(easting, northing):
@@ -196,6 +188,11 @@ def wind_visual(wind_speed):
     <div style='width: {width}%; background-color: #B0C4DE; height: 10px; border-radius: 5px;'></div>          
     """
 
+def get_name(points_df, fk_number):
+    #st.dataframe(points_df)
+    for i, p in points_df.iterrows():
+        if str(p[4]) == str(fk_number):
+            return str(p[1])
 
 def process_traffic_data(points_df, counts_df, start_timestamp, duration, unit):
     if points_df is None or counts_df is None:
@@ -242,7 +239,9 @@ def process_traffic_data(points_df, counts_df, start_timestamp, duration, unit):
 
         # Match FK_STANDORT with fk_zaehler for popup name
         standort = str(traffic_row['FK_STANDORT'])
-        point_row = points_df[points_df['fk_zaehler'].astype(str) == standort]
+        #point_row = points_df[points_df['fk_zaehler'].astype(str) == standort]
+
+        bezeichnung = get_name(points_df, str(int(standort[:-2])))
 
         total_traffic = traffic_row['total_traffic']
         traffic_norm = traffic_row['traffic_norm']
@@ -258,12 +257,7 @@ def process_traffic_data(points_df, counts_df, start_timestamp, duration, unit):
             # Scale radius from 5 to 15
             radius = 5 + 10 * traffic_norm
 
-        if not point_row.empty:
-            bezeichnung = point_row['bezeichnung'].iloc[0]
-            popup = f"{bezeichnung}: {total_traffic:.0f} (Velo: {traffic_row['VELO_IN']:.0f}/{traffic_row['VELO_OUT']:.0f}, Fuss: {traffic_row['FUSS_IN']:.0f}/{traffic_row['FUSS_OUT']:.0f})"
-        else:
-            bezeichnung = ""
-            popup = f"Standort {bezeichnung}: {total_traffic:.0f} (Velo: {traffic_row['VELO_IN']:.0f}/{traffic_row['VELO_OUT']:.0f}, Fuss: {traffic_row['FUSS_IN']:.0f}/{traffic_row['FUSS_OUT']:.0f})"
+        popup = f"Standort {bezeichnung}: {total_traffic:.0f} (Velo: {traffic_row['VELO_IN']:.0f}/{traffic_row['VELO_OUT']:.0f}, Fuss: {traffic_row['FUSS_IN']:.0f}/{traffic_row['FUSS_OUT']:.0f})"
 
         points.append({
             "coords": [lat, lon],
