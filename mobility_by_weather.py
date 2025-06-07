@@ -72,8 +72,8 @@ def is_dark(timestamp: int) -> bool:
     dt = datetime.fromtimestamp(timestamp + 7200)  # Add 2 hours for CEST
     month = dt.month
     hour = dt.hour
-    sunrise = 8 if month in [11, 12, 1, 2] else 7 if month in [3, 4, 9, 10] else 6
-    sunset = 18 if month in [11, 12, 1, 2] else 19 if month in [3, 4, 9, 10] else 21
+    sunrise = 6 if month in [11, 12, 1, 2] else 5 if month in [3, 4, 9, 10] else 4
+    sunset = 17 if month in [11, 12, 1, 2] else 18 if month in [3, 4, 9, 10] else 20
     return hour < sunrise or hour >= sunset
 
 
