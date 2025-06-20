@@ -5,7 +5,6 @@ aktuelle version aufrufbar unter:
 https://davisarbeit.streamlit.app/
 
 
-
-mit Pyhton
+mit Python
 
 Hilfsmittel: GROK.

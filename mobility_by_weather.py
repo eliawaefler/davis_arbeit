@@ -582,12 +582,15 @@ def display_statistics(right, city, start_timestamp, duration, unit, selected_ho
 def main():
     initialize_session_state()
     wetter_Zurich, zurich_points_df, zurich_counts_df = load_data()
+
     left, _, middle, _, right = setup_layout()
+    st.session_state["page"] = "main"
+
     city, start_timestamp, unit, duration, selected_hour, show_dataf, show_abstract, show_weather, show_weather_rain, show_weather_temp, show_weather_wind, show_map, show_line = create_controls(left)
     filtered_df = filter_data(city, wetter_Zurich, zurich_points_df, zurich_counts_df, start_timestamp, duration, unit, selected_hour)
     display_middle(middle, filtered_df, duration, start_timestamp, unit, selected_hour, show_abstract, show_weather, show_weather_rain, show_weather_temp, show_weather_wind, show_map, show_line, show_dataf, city, zurich_points_df, zurich_counts_df)
     #display_statistics(right, city, start_timestamp, duration, unit, selected_hour, zurich_counts_df, show_dataf)
-    #
+
 
 if __name__ == '__main__':
     main()
